@@ -11,6 +11,7 @@ const DEFAULTS = {
   idecoYen: 276000,       // 月23,000円×12
   kyosaiYen: 12000,       // 月1,000円×12
   shahoMonthlyYen: 15000, // 本人負担分の月額(設定で変更可)
+  shahoExtraYen: 0,       // 特別枠: 国保切替前の保険料・年金未納の一括納付など(年額)
   lifeInsYen: 0,
   quakeInsYen: 0,
   otherDeductionYen: 0,
@@ -32,6 +33,7 @@ const inBlue = $("inBlue");
 const inIdeco = $("inIdeco");
 const inKyosai = $("inKyosai");
 const inShaho = $("inShaho");
+const inShahoExtra = $("inShahoExtra");
 const inLifeIns = $("inLifeIns");
 const inQuakeIns = $("inQuakeIns");
 const inOther = $("inOther");
@@ -39,10 +41,13 @@ const inOther = $("inOther");
 const outNet = $("outNet");
 const outNetNote = $("outNetNote");
 const outMonthlySave = $("outMonthlySave");
+const outFurusato = $("outFurusato");
 const outIncomeTax = $("outIncomeTax");
 const outResidentTax = $("outResidentTax");
 const outBusinessTax = $("outBusinessTax");
 const outShaho = $("outShaho");
+const rowShahoExtra = $("rowShahoExtra");
+const outShahoExtra = $("outShahoExtra");
 const outSavings = $("outSavings");
 const outProcess = $("outProcess");
 
@@ -103,6 +108,7 @@ attachNumericInput(inExpenses, () => state.expensesMan, (v) => { state.expensesM
 attachNumericInput(inIdeco, () => state.idecoYen, (v) => { state.idecoYen = v; });
 attachNumericInput(inKyosai, () => state.kyosaiYen, (v) => { state.kyosaiYen = v; });
 attachNumericInput(inShaho, () => state.shahoMonthlyYen, (v) => { state.shahoMonthlyYen = v; });
+attachNumericInput(inShahoExtra, () => state.shahoExtraYen, (v) => { state.shahoExtraYen = v; });
 attachNumericInput(inLifeIns, () => state.lifeInsYen, (v) => { state.lifeInsYen = v; });
 attachNumericInput(inQuakeIns, () => state.quakeInsYen, (v) => { state.quakeInsYen = v; });
 attachNumericInput(inOther, () => state.otherDeductionYen, (v) => { state.otherDeductionYen = v; });
@@ -164,6 +170,7 @@ function syncInputs() {
   inIdeco.value = state.idecoYen.toLocaleString("ja-JP");
   inKyosai.value = state.kyosaiYen.toLocaleString("ja-JP");
   inShaho.value = state.shahoMonthlyYen.toLocaleString("ja-JP");
+  inShahoExtra.value = state.shahoExtraYen.toLocaleString("ja-JP");
   inLifeIns.value = state.lifeInsYen.toLocaleString("ja-JP");
   inQuakeIns.value = state.quakeInsYen.toLocaleString("ja-JP");
   inOther.value = state.otherDeductionYen.toLocaleString("ja-JP");
@@ -178,6 +185,7 @@ function render() {
     idecoYen: state.idecoYen,
     kyosaiYen: state.kyosaiYen,
     shahoMonthlyYen: state.shahoMonthlyYen,
+    shahoExtraYen: state.shahoExtraYen,
     lifeInsYen: state.lifeInsYen,
     quakeInsYen: state.quakeInsYen,
     otherDeductionYen: state.otherDeductionYen,
@@ -189,10 +197,14 @@ function render() {
 
   outMonthlySave.textContent = "月 " + fmt(r.monthlySavings);
 
+  outFurusato.textContent = r.furusatoLimit > 0 ? "〜" + fmt(r.furusatoLimit) : "—(住民税非課税)";
+
   outIncomeTax.textContent = fmt(r.incomeTax);
   outResidentTax.textContent = fmt(r.residentTax) + (r.residentExemptNote ? " ※" : "");
   outBusinessTax.textContent = fmt(r.businessTax);
   outShaho.textContent = fmt(r.shahoAnnual) + `(月${fmt(state.shahoMonthlyYen)})`;
+  rowShahoExtra.hidden = r.shahoExtra <= 0;
+  outShahoExtra.textContent = fmt(r.shahoExtra);
   outSavings.textContent = fmt(r.savingsAnnual);
 
   outProcess.innerHTML = buildProcessHtml(r);
@@ -212,7 +224,7 @@ function buildProcessHtml(r) {
   html += `</table>`;
 
   html += `<h3>2. 所得税(令和8年分)</h3><table>`;
-  html += row("社会保険料控除", fmt(r.socialInsDeduction), "健保+厚年 月額×12");
+  html += row("社会保険料控除", fmt(r.socialInsDeduction), r.shahoExtra > 0 ? `健保+厚年 月額×12(${fmt(r.shahoAnnual)}) + 特別枠(${fmt(r.shahoExtra)})` : "健保+厚年 月額×12");
   html += row("小規模企業共済等掛金控除", fmt(r.kyosaiDeduction), "iDeCo+共済");
   if (r.lifeIns) html += row("生命保険料控除", fmt(r.lifeIns));
   if (r.quakeIns) html += row("地震保険料控除", fmt(r.quakeIns));
@@ -240,10 +252,21 @@ function buildProcessHtml(r) {
   html += row("<b>個人事業税</b>", "<b>" + fmt(r.businessTax) + "</b>", "×5%(翌年の経費に算入可)");
   html += `</table>`;
 
-  html += `<h3>5. 手取り</h3><table>`;
+  html += `<h3>5. ふるさと納税の目安上限</h3><table>`;
+  if (r.furusatoLimit > 0) {
+    html += row("住民税所得割×20%", fmt(Math.floor(r.residentIncomeLevy * 0.2)), "特例控除の上限");
+    html += row("÷ (90% − 所得税率" + r.furusatoRatePct + "%×1.021) + 2,000円", "", "特例控除率で割り戻し");
+    html += row("<b>目安上限額</b>", "<b>〜" + fmt(r.furusatoLimit) + "</b>", "千円未満切捨て(安全側)");
+  } else {
+    html += row("住民税所得割が0のため", "メリットなし");
+  }
+  html += `</table>`;
+
+  html += `<h3>6. 手取り</h3><table>`;
   html += row("売上 − 経費", fmt(r.sales - r.expenses));
   html += row("税金合計(積立対象)", "−" + fmt(r.annualTaxForSavings));
   html += row("社会保険料", "−" + fmt(r.shahoAnnual));
+  if (r.shahoExtra > 0) html += row("社会保険料(特別枠)", "−" + fmt(r.shahoExtra), "国保切替前・年金未納の一括納付など");
   html += row("iDeCo+共済", "−" + fmt(r.savingsAnnual), "将来自分が受け取る積立");
   html += row("<b>年間手取り</b>", "<b>" + fmt(r.netIncome) + "</b>");
   html += `</table>`;
