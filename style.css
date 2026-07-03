@@ -160,6 +160,14 @@ input, select { font-family: inherit; font-size: 18px; color: var(--ink); }
   color: var(--amber);
 }
 
+.result-card.furusato {
+  background: var(--green-pale);
+  border: 1.5px solid #bcd8c8;
+  color: var(--green-dark);
+}
+
+.result-card.furusato .result-amount { font-size: 30px; }
+
 .result-label { margin: 0 0 2px; font-size: 13px; font-weight: 700; opacity: 0.9; }
 
 .result-amount {
