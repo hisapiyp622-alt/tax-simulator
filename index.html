@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="手取り" />
 
-<link rel="stylesheet" href="style.css?v=1" />
+<link rel="stylesheet" href="style.css?v=2" />
 </head>
 <body>
 
@@ -67,6 +67,11 @@
         <p class="field-note">健康保険+厚生年金(ソロ・コンシェルジュ経由)。本人負担分として控除対象にする月額を入力。</p>
       </div>
       <div class="field">
+        <label for="inShahoExtra">社会保険料控除の特別枠 <span class="unit">(円・年額)</span></label>
+        <input id="inShahoExtra" type="text" inputmode="numeric" autocomplete="off" />
+        <p class="field-note">上の月額×12に含まれない今年支払った社会保険料。例: 4月の社保切替前(1〜3月)の国民健康保険料、国民年金の未納分の一括納付など。控除と支出の両方に反映します。</p>
+      </div>
+      <div class="field">
         <label for="inLifeIns">生命保険料控除 <span class="unit">(円・任意)</span></label>
         <input id="inLifeIns" type="text" inputmode="numeric" autocomplete="off" />
       </div>
@@ -95,6 +100,12 @@
       <p class="result-note">所得税+住民税+個人事業税の年額÷12(千円単位切上げ)。<br />※所得税は前年の申告納税額が15万円以上だと予定納税(7月・11月)で先払いが発生します。</p>
     </div>
 
+    <div class="result-card furusato">
+      <p class="result-label">ふるさと納税の目安上限額</p>
+      <p class="result-amount" id="outFurusato">—</p>
+      <p class="result-note">自己負担2,000円で済む寄付上限の目安(千円未満切捨て・概算)。今年の所得見込みで変動するため、年末が近づいてから使い切るのが安全です。<br />※個人事業主は確定申告で寄附金控除を申告します(ワンストップ特例は使えません)。</p>
+    </div>
+
     <div class="breakdown-card">
       <h2 class="breakdown-title">税金・社会保険の内訳(年額)</h2>
       <dl class="breakdown-list">
@@ -102,6 +113,7 @@
         <div class="breakdown-row"><dt>住民税(所得割+均等割)</dt><dd id="outResidentTax">—</dd></div>
         <div class="breakdown-row"><dt>個人事業税</dt><dd id="outBusinessTax">—</dd></div>
         <div class="breakdown-row"><dt>社会保険料(健保+厚年)</dt><dd id="outShaho">—</dd></div>
+        <div class="breakdown-row" id="rowShahoExtra" hidden><dt>社会保険料(特別枠)</dt><dd id="outShahoExtra">—</dd></div>
         <div class="breakdown-row sub"><dt>iDeCo+小規模企業共済</dt><dd id="outSavings">—</dd></div>
       </dl>
       <p class="breakdown-note">※個人事業税は翌年の経費に算入できます(8月・11月納付)。<br />※iDeCo・共済は支出に含めていますが、将来自分が受け取る積立です。</p>
@@ -145,8 +157,8 @@
   </div>
 </div>
 
-<script src="tax.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="tax.js?v=2"></script>
+<script src="app.js?v=2"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
