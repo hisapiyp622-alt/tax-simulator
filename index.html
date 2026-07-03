@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1b5e3b" />
+<title>手取りシミュレーター</title>
+
+<!-- ホーム画面追加(PWA)対応 -->
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="手取り" />
+
+<link rel="stylesheet" href="style.css?v=1" />
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-inner">
+    <h1 class="app-title">手取りシミュレーター</h1>
+    <label class="mode-toggle">
+      <span class="mode-label" id="modeLabel">簡易</span>
+      <input type="checkbox" id="modeSwitch" />
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
+    </label>
+  </div>
+  <p class="header-sub">個人事業主(青色申告)・令和8年分ベース</p>
+</header>
+
+<main class="container">
+
+  <!-- 入力エリア -->
+  <section class="input-area">
+    <div class="field">
+      <label for="inSales">年間売上 <span class="unit">(万円)</span></label>
+      <input id="inSales" type="text" inputmode="numeric" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="inExpenses">年間経費 <span class="unit">(万円)</span></label>
+      <input id="inExpenses" type="text" inputmode="numeric" autocomplete="off" />
+    </div>
+
+    <!-- 詳細モードのみ表示 -->
+    <div id="detailFields" class="detail-fields" hidden>
+      <div class="field">
+        <label for="inBlue">青色申告特別控除</label>
+        <select id="inBlue">
+          <option value="650000">65万円(e-Tax申告)</option>
+          <option value="550000">55万円</option>
+          <option value="100000">10万円</option>
+          <option value="0">なし(白色)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="inIdeco">iDeCo年額 <span class="unit">(円)</span></label>
+        <input id="inIdeco" type="text" inputmode="numeric" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="inKyosai">小規模企業共済年額 <span class="unit">(円)</span></label>
+        <input id="inKyosai" type="text" inputmode="numeric" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="inShaho">社会保険料の月額 <span class="unit">(円・本人負担分)</span></label>
+        <input id="inShaho" type="text" inputmode="numeric" autocomplete="off" />
+        <p class="field-note">健康保険+厚生年金(ソロ・コンシェルジュ経由)。本人負担分として控除対象にする月額を入力。</p>
+      </div>
+      <div class="field">
+        <label for="inLifeIns">生命保険料控除 <span class="unit">(円・任意)</span></label>
+        <input id="inLifeIns" type="text" inputmode="numeric" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="inQuakeIns">地震保険料控除 <span class="unit">(円・任意)</span></label>
+        <input id="inQuakeIns" type="text" inputmode="numeric" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="inOther">その他の所得控除 <span class="unit">(円・任意)</span></label>
+        <input id="inOther" type="text" inputmode="numeric" autocomplete="off" />
+      </div>
+    </div>
+  </section>
+
+  <!-- 結果エリア -->
+  <section class="result-area">
+    <div class="result-card primary">
+      <p class="result-label">年間手取り額</p>
+      <p class="result-amount" id="outNet">—</p>
+      <p class="result-note" id="outNetNote"></p>
+    </div>
+
+    <div class="result-card savings">
+      <p class="result-label">毎月の税金積立額</p>
+      <p class="result-amount" id="outMonthlySave">—</p>
+      <p class="result-note">所得税+住民税+個人事業税の年額÷12(千円単位切上げ)。<br />※所得税は前年の申告納税額が15万円以上だと予定納税(7月・11月)で先払いが発生します。</p>
+    </div>
+
+    <div class="breakdown-card">
+      <h2 class="breakdown-title">税金・社会保険の内訳(年額)</h2>
+      <dl class="breakdown-list">
+        <div class="breakdown-row"><dt>所得税(復興特別所得税込)</dt><dd id="outIncomeTax">—</dd></div>
+        <div class="breakdown-row"><dt>住民税(所得割+均等割)</dt><dd id="outResidentTax">—</dd></div>
+        <div class="breakdown-row"><dt>個人事業税</dt><dd id="outBusinessTax">—</dd></div>
+        <div class="breakdown-row"><dt>社会保険料(健保+厚年)</dt><dd id="outShaho">—</dd></div>
+        <div class="breakdown-row sub"><dt>iDeCo+小規模企業共済</dt><dd id="outSavings">—</dd></div>
+      </dl>
+      <p class="breakdown-note">※個人事業税は翌年の経費に算入できます(8月・11月納付)。<br />※iDeCo・共済は支出に含めていますが、将来自分が受け取る積立です。</p>
+    </div>
+
+    <details class="process-accordion">
+      <summary>計算過程を見る</summary>
+      <div id="outProcess" class="process-body"></div>
+    </details>
+  </section>
+</main>
+
+<footer class="app-footer">
+  <div class="footer-actions">
+    <button id="settingsBtn" class="btn-ghost" type="button">⚙ 設定</button>
+    <button id="resetBtn" class="btn-ghost danger" type="button">リセット</button>
+  </div>
+  <p class="disclaimer">本アプリは概算のシミュレーションです。実際の税額・保険料は申告内容や自治体の決定により異なります。正確な金額は税務署・尼崎市・税理士にご確認ください。</p>
+</footer>
+
+<!-- 設定モーダル -->
+<div id="settingsOverlay" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <h2>設定(プロフィール)</h2>
+    <div class="field">
+      <label for="setDependents">16歳未満の扶養親族の人数</label>
+      <input id="setDependents" type="text" inputmode="numeric" autocomplete="off" />
+      <p class="field-note">所得税の扶養控除対象外ですが、住民税の非課税判定に使います。</p>
+    </div>
+    <div class="field">
+      <label>居住地</label>
+      <p class="fixed-value">兵庫県尼崎市(住民税均等割・個人事業税率に反映済み)</p>
+    </div>
+    <div class="field">
+      <label>生年月日</label>
+      <p class="fixed-value">1985年5月1日(40歳以上のため介護保険料は健康保険料に含む前提)</p>
+    </div>
+    <div class="modal-actions">
+      <button id="settingsCloseBtn" class="btn-primary" type="button">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script src="tax.js?v=1"></script>
+<script src="app.js?v=1"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
