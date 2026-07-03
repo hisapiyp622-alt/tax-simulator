@@ -127,6 +127,32 @@ function incomeTaxBase(taxableIncome) {
   return 0;
 }
 
+// 所得税の限界税率(ふるさと納税の特例控除率の計算に使用)
+function marginalIncomeTaxRate(taxableIncome) {
+  for (const b of TAX_CONSTANTS.incomeTax.brackets) {
+    if (taxableIncome <= b.upTo) return b.rate;
+  }
+  return 0.45;
+}
+
+// ふるさと納税の目安上限額(自己負担2,000円で済む寄付額)
+// 上限 = 住民税所得割額×20% ÷ (90% − 所得税率×1.021) + 2,000円
+// 所得税率は寄付金控除後の課税所得の限界税率が正式なため、1回だけ再判定して
+// 低い方の税率を使う(低い税率ほど上限が小さく安全側になる)。千円未満切捨て。
+function furusatoLimitYen(residentIncomeLevy, taxableIT) {
+  if (residentIncomeLevy <= 0) return { limit: 0, ratePct: 0 };
+  const surtax = 1 + TAX_CONSTANTS.incomeTax.reconstructionSurtaxRate; // 1.021
+  let rate = marginalIncomeTaxRate(taxableIT);
+  let limit = (residentIncomeLevy * 0.2) / (0.9 - rate * surtax) + 2000;
+  // 寄付金控除で課税所得が下の税率帯に落ちる場合は安全側で再計算
+  const rate2 = marginalIncomeTaxRate(Math.max(0, taxableIT - (limit - 2000)));
+  if (rate2 < rate) {
+    rate = rate2;
+    limit = (residentIncomeLevy * 0.2) / (0.9 - rate * surtax) + 2000;
+  }
+  return { limit: Math.floor(limit / 1000) * 1000, ratePct: rate * 100 };
+}
+
 // ============================================================
 // メイン計算関数
 // input: {
@@ -134,6 +160,10 @@ function incomeTaxBase(taxableIncome) {
 //   blueDeductionYen,                // 青色申告特別控除(650000/550000/100000/0)
 //   idecoYen, kyosaiYen,             // iDeCo・小規模企業共済の年額(円)
 //   shahoMonthlyYen,                 // 社会保険料の月額(円・本人負担分)
+//   shahoExtraYen,                   // 社会保険料控除の特別枠(年額円)。
+//                                    // 国保→社保切替前に払った国民健康保険料や
+//                                    // 国民年金の未納分の一括納付など、月額×12に
+//                                    // 含まれない今年支払った社会保険料。
 //   lifeInsYen, quakeInsYen,         // 生命保険料控除・地震保険料控除(円)
 //   otherDeductionYen,               // その他の所得控除(円)
 //   dependentsUnder16,               // 16歳未満の扶養親族の人数
@@ -147,6 +177,7 @@ function calcTax(input) {
   const ideco = Math.max(0, input.idecoYen || 0);
   const kyosai = Math.max(0, input.kyosaiYen || 0);
   const shahoAnnual = Math.max(0, (input.shahoMonthlyYen || 0) * 12);
+  const shahoExtra = Math.max(0, input.shahoExtraYen || 0);
   const lifeIns = Math.max(0, input.lifeInsYen || 0);
   const quakeIns = Math.max(0, input.quakeInsYen || 0);
   const other = Math.max(0, input.otherDeductionYen || 0);
@@ -159,7 +190,8 @@ function calcTax(input) {
   const businessIncome = incomeBeforeBlue - blueApplied; // = 合計所得金額
 
   // ---- 2. 所得控除(共通部分) ----
-  const socialInsDeduction = shahoAnnual;
+  // 社会保険料控除 = 月額×12 + 特別枠(国保切替前の保険料・年金未納の一括納付など)
+  const socialInsDeduction = shahoAnnual + shahoExtra;
   const kyosaiDeduction = ideco + kyosai; // 小規模企業共済等掛金控除(全額)
   const commonDeductions = socialInsDeduction + kyosaiDeduction + lifeIns + quakeIns + other;
 
@@ -213,17 +245,21 @@ function calcTax(input) {
   const businessTaxBase = Math.max(0, businessIncome + blueApplied - C.businessTax.ownerDeductionYen);
   const businessTax = floorHundred(businessTaxBase * C.businessTax.rate);
 
-  // ---- 6. 積立額・手取り ----
+  // ---- 6. ふるさと納税の目安上限額 ----
+  const furusato = furusatoLimitYen(residentIncomeLevy, taxableIT);
+
+  // ---- 7. 積立額・手取り ----
   const annualTaxForSavings = incomeTax + residentTax + businessTax;
   // 千円単位切上げ
   const monthlySavings = Math.ceil(annualTaxForSavings / 12 / 1000) * 1000;
 
   const savingsAnnual = ideco + kyosai; // 将来受け取れる積立
-  const netIncome = sales - expenses - annualTaxForSavings - shahoAnnual - savingsAnnual;
+  // 特別枠(国保・年金追納など)も今年の実支出として手取りから差し引く
+  const netIncome = sales - expenses - annualTaxForSavings - shahoAnnual - shahoExtra - savingsAnnual;
 
   return {
     // 入力の正規化値
-    sales, expenses, shahoAnnual, ideco, kyosai, dependents,
+    sales, expenses, shahoAnnual, shahoExtra, ideco, kyosai, dependents,
     // 事業所得
     incomeBeforeBlue, blueApplied, businessIncome,
     // 所得控除
@@ -237,6 +273,8 @@ function calcTax(input) {
     uniformNonTaxableLimit, incomeLevyNonTaxableLimit,
     // 個人事業税
     businessTaxBase, businessTax,
+    // ふるさと納税
+    furusatoLimit: furusato.limit, furusatoRatePct: furusato.ratePct,
     // まとめ
     annualTaxForSavings, monthlySavings, savingsAnnual, netIncome,
   };
